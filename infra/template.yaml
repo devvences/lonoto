@@ -1,0 +1,307 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  My Workspace — private S3 bucket served through CloudFront with Origin Access
+  Control. Static hosting only; notes stay in the browser.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: my-workspace
+    MinLength: 3
+    MaxLength: 30
+    AllowedPattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$'
+    Description: Lowercase prefix used for resource names.
+
+  PriceClass:
+    Type: String
+    Default: PriceClass_100
+    AllowedValues:
+      - PriceClass_100
+      - PriceClass_200
+      - PriceClass_All
+    Description: CloudFront edge locations. PriceClass_100 is the cheapest.
+
+  OmdbApiKey:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: >-
+      OMDb API key used only by the movie lookup Lambda. Leave empty to deploy
+      without movie lookup; the key is never sent to the browser.
+
+  MovieOriginSecret:
+    Type: String
+    NoEcho: true
+    MinLength: 16
+    MaxLength: 128
+    Description: >-
+      Shared secret CloudFront sends to the movie API. The deploy script
+      generates one automatically.
+
+Resources:
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub '${ProjectName}-${AWS::AccountId}-${AWS::Region}'
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: AbortIncompleteUploads
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${ProjectName}-oac'
+        Description: Read-only access to the private site bucket.
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  CachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: !Sub '${ProjectName}-cache'
+        Comment: Cache static assets; origin Cache-Control headers win.
+        DefaultTTL: 86400
+        MaxTTL: 31536000
+        MinTTL: 0
+        ParametersInCacheKeyAndForwardedToOrigin:
+          EnableAcceptEncodingGzip: true
+          EnableAcceptEncodingBrotli: true
+          CookiesConfig:
+            CookieBehavior: none
+          HeadersConfig:
+            HeaderBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: none
+
+  SecurityHeaders:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub '${ProjectName}-security-headers'
+        Comment: Security headers for the static app.
+        SecurityHeadersConfig:
+          ContentSecurityPolicy:
+            ContentSecurityPolicy: >-
+              default-src 'self'; script-src 'self'; style-src 'self'
+              'unsafe-inline'; img-src 'self' data: blob:
+              https://*.media-amazon.com https://*.media-imdb.com;
+              font-src 'self' data:; connect-src 'self'
+              https://*.media-amazon.com https://*.media-imdb.com;
+              manifest-src 'self'; worker-src
+              'self' blob:; object-src 'none'; base-uri 'self';
+              frame-ancestors 'none'; form-action 'self';
+              upgrade-insecure-requests
+            Override: true
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+          StrictTransportSecurity:
+            AccessControlMaxAgeSec: 31536000
+            IncludeSubdomains: true
+            Preload: false
+            Override: true
+
+  MovieApiCachePolicy:
+    Type: AWS::CloudFront::CachePolicy
+    Properties:
+      CachePolicyConfig:
+        Name: !Sub '${ProjectName}-movie-api-no-cache'
+        Comment: Do not cache movie lookup responses.
+        DefaultTTL: 0
+        MaxTTL: 0
+        MinTTL: 0
+        ParametersInCacheKeyAndForwardedToOrigin:
+          EnableAcceptEncodingGzip: true
+          EnableAcceptEncodingBrotli: true
+          CookiesConfig:
+            CookieBehavior: none
+          HeadersConfig:
+            HeaderBehavior: none
+          QueryStringsConfig:
+            QueryStringBehavior: all
+
+  MovieApiOriginRequestPolicy:
+    Type: AWS::CloudFront::OriginRequestPolicy
+    Properties:
+      OriginRequestPolicyConfig:
+        Name: !Sub '${ProjectName}-movie-api-origin'
+        Comment: Forward movie search parameters to the API.
+        CookiesConfig:
+          CookieBehavior: none
+        HeadersConfig:
+          HeaderBehavior: none
+        QueryStringsConfig:
+          QueryStringBehavior: all
+
+  MovieApiRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+
+  MovieApiFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${ProjectName}-movie-api'
+      Description: Server-side OMDb proxy that keeps the API key off the client.
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt MovieApiRole.Arn
+      Timeout: 15
+      MemorySize: 128
+      Environment:
+        Variables:
+          OMDB_API_KEY: !Ref OmdbApiKey
+          MOVIE_ORIGIN_SECRET: !Ref MovieOriginSecret
+      Code:
+        ZipFile: __MOVIE_HANDLER_CODE__
+
+  MovieApiFunctionUrl:
+    Type: AWS::Lambda::Url
+    Properties:
+      TargetFunctionArn: !Ref MovieApiFunction
+      AuthType: NONE
+      InvokeMode: BUFFERED
+
+  MovieApiFunctionUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunctionUrl
+      FunctionName: !Ref MovieApiFunction
+      Principal: '*'
+      FunctionUrlAuthType: NONE
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub '${ProjectName} static site'
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: !Ref PriceClass
+        Origins:
+          - Id: SiteOrigin
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+          - Id: MovieApiOrigin
+            DomainName: !Select [2, !Split ['/', !GetAtt MovieApiFunctionUrl.FunctionUrl]]
+            OriginCustomHeaders:
+              - HeaderName: x-origin-secret
+                HeaderValue: !Ref MovieOriginSecret
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols:
+                - TLSv1.2
+        DefaultCacheBehavior:
+          TargetOriginId: SiteOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          CachedMethods:
+            - GET
+            - HEAD
+            - OPTIONS
+          Compress: true
+          CachePolicyId: !Ref CachePolicy
+          ResponseHeadersPolicyId: !Ref SecurityHeaders
+        OrderedCacheBehaviors:
+          - PathPattern: /api/*
+            TargetOriginId: MovieApiOrigin
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods:
+              - GET
+              - HEAD
+            CachedMethods:
+              - GET
+              - HEAD
+            Compress: true
+            CachePolicyId: !Ref MovieApiCachePolicy
+            OriginRequestPolicyId: !Ref MovieApiOriginRequestPolicy
+            ResponseHeadersPolicyId: !Ref SecurityHeaders
+        # HashRouter keeps all routes under "/", but these responses make
+        # direct links and stale hashed asset requests land on the app shell.
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+            ErrorCachingMinTTL: 0
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontReadOnly
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${SiteBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+
+Outputs:
+  BucketName:
+    Description: Private S3 bucket that holds the built app.
+    Value: !Ref SiteBucket
+
+  DistributionId:
+    Description: CloudFront distribution id (used for invalidations).
+    Value: !Ref Distribution
+
+  DistributionDomainName:
+    Description: CloudFront domain name.
+    Value: !GetAtt Distribution.DomainName
+
+  SiteUrl:
+    Description: Public URL of the app.
+    Value: !Sub 'https://${Distribution.DomainName}'
+
+  MovieApiEndpoint:
+    Description: Server-side movie lookup endpoint served through CloudFront.
+    Value: !Sub 'https://${Distribution.DomainName}/api/movies'
