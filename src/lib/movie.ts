@@ -49,6 +49,16 @@ export function isMovieTag(tag: string): boolean {
   return tag.trim().toLowerCase() === MOVIE_TAG;
 }
 
+/**
+ * Movie lookup needs the server-side OMDb proxy. Static-only builds such as
+ * GitHub Pages set VITE_ENABLE_MOVIE_LOOKUP=false so the UI does not offer a
+ * feature that cannot work there.
+ */
+export function isMovieLookupEnabled(): boolean {
+  const flag = import.meta.env.VITE_ENABLE_MOVIE_LOOKUP;
+  return flag !== 'false' && flag !== '0';
+}
+
 interface MovieApiError {
   error?: string;
 }

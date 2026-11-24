@@ -44,6 +44,7 @@ import {
   type ImportMode,
 } from '../lib/backup';
 import { formatBytes } from '../lib/time';
+import { isMovieLookupEnabled } from '../lib/movie';
 import { ensurePersistentStorage } from '../db/db';
 import { seedSamples } from '../db/seed';
 import { db } from '../db/db';
@@ -441,9 +442,11 @@ export default function SettingsDialog({
               </Typography>
               <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
                 My Workspace 1.0 · local-first notes. No account and no
-                tracking. Notes stay in this browser; movie lookup goes through
-                the app's server only when you use it. Built with React,
-                Material UI, Lexical and IndexedDB.
+                tracking. Notes stay in this browser.{' '}
+                {isMovieLookupEnabled()
+                  ? "Movie lookup goes through the app's server only when you use it."
+                  : 'Movie lookup is unavailable in this static build.'}{' '}
+                Built with React, Material UI, Lexical and IndexedDB.
               </Typography>
             </Box>
           </Stack>

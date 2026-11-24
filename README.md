@@ -143,6 +143,8 @@ keeps working until you accept the update.
 
 Movie lookup is the one feature that needs a connection. Once the movie info is
 added, the poster is embedded in the note and everything works offline again.
+Static-only builds (GitHub Pages) disable movie lookup entirely; see
+[Deploy to GitHub Pages](#deploy-to-github-pages-static-only).
 
 The service worker is only active in a production build (`npm run build` +
 `npm run preview` or a deployed site), not in `npm run dev`.
@@ -243,6 +245,37 @@ aws cloudformation delete-stack --stack-name my-workspace --region us-east-1
 ```
 
 `BucketName` is printed by the deploy script and available in the stack outputs.
+
+## Deploy to GitHub Pages (static only)
+
+GitHub Pages can host the frontend but cannot run the Node movie proxy. The
+included workflow (`.github/workflows/deploy-pages.yml`) builds the app for the
+project Pages URL and turns movie lookup off, so everything else — notes,
+tags, images, calendar, backups, and offline use — works normally.
+
+1. Push the repository to GitHub.
+2. Open **Settings → Pages** and set **Source** to **GitHub Actions**.
+3. Push to `main` (or run the workflow manually). The site is published at
+   `https://<user>.github.io/<repo>/` — for this repository,
+   `https://devvences.github.io/lonoto/`.
+
+The workflow builds with:
+
+```bash
+VITE_BASE_PATH=/lonoto/ VITE_ENABLE_MOVIE_LOOKUP=false npm run build
+```
+
+- `VITE_BASE_PATH` sets Vite's `base` (and the PWA manifest `start_url`/`scope`)
+  to the project subpath. It must match the repository name.
+- `VITE_ENABLE_MOVIE_LOOKUP=false` hides the movie dialog and shows an
+  informational message if the `movie` tag is added. Notes and their `movie`
+  tag still work; only the automatic details/poster lookup is skipped.
+- The workflow writes `dist/.nojekyll` so GitHub Pages serves Vite's files
+  without Jekyll processing.
+
+Hash routing (`#/…`) means no SPA 404 rewrites are needed. The same build works
+on any static host; set `VITE_BASE_PATH` only when the site is not served from
+the domain root.
 
 ## Hosting elsewhere
 

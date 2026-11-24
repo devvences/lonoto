@@ -34,6 +34,7 @@ import { useOnlineStatus } from '../hooks/useEnvironment';
 import { copyText } from '../lib/clipboard';
 import {
   buildMovieBody,
+  isMovieLookupEnabled,
   isMovieTag,
   type MoviePayload,
 } from '../lib/movie';
@@ -339,7 +340,14 @@ export default function BoardPage() {
         const hadMovie = existing?.tags.some(isMovieTag) ?? false;
         const hasMovie = next.some(isMovieTag);
         if (existing && !hadMovie && hasMovie) {
-          setMovieTarget({ id, title: existing.title });
+          if (isMovieLookupEnabled()) {
+            setMovieTarget({ id, title: existing.title });
+          } else {
+            notify(
+              'Movie lookup is unavailable in this static build. The tag was added without details.',
+              'info',
+            );
+          }
         }
       } catch (error) {
         console.error('Could not save the tags', error);

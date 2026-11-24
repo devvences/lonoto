@@ -55,7 +55,12 @@ import {
   normalizeTags,
   setDoneTag,
 } from '../lib/tags';
-import { buildMovieNodes, isMovieTag, type MoviePayload } from '../lib/movie';
+import {
+  buildMovieNodes,
+  isMovieLookupEnabled,
+  isMovieTag,
+  type MoviePayload,
+} from '../lib/movie';
 import { isContentlessNote } from '../lib/calendar';
 import { isValidUrl } from '../lib/url';
 import { NOTE_NODES } from '../editor/nodes';
@@ -317,7 +322,16 @@ export default function EditorPage() {
     const hasMovie = next.some(isMovieTag);
     setTags(next);
     updateLocal({ tags: next });
-    if (!hadMovie && hasMovie) setMovieOpen(true);
+    if (!hadMovie && hasMovie) {
+      if (isMovieLookupEnabled()) {
+        setMovieOpen(true);
+      } else {
+        notify(
+          'Movie lookup is unavailable in this static build. The tag was added without details.',
+          'info',
+        );
+      }
+    }
   };
 
   const handleDateAdd = useCallback(
