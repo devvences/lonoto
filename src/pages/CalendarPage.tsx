@@ -174,7 +174,8 @@ export default function CalendarPage() {
                 sx={{ mb: 2, borderRadius: 2 }}
               >
                 No dated notes yet. Add a date tag to a note, for example{' '}
-                <code>2026-11-02</code> or <code>2026-11-02t17:00</code>, or use{' '}
+                <code>2026-11-02</code>, <code>2026-11-02t17:00</code>, or{' '}
+                <code>2026-11-02..2026-11-05</code>, or use{' '}
                 <strong>Add date</strong> in the editor or on a card. Dated
                 notes appear here automatically.
               </Alert>
@@ -496,8 +497,9 @@ export default function CalendarPage() {
               color="text.secondary"
               sx={{ display: 'block', mt: 1.5, px: 0.5 }}
             >
-              Dates come from tags like <code>2026-11-02</code> (all day) or{' '}
-              <code>2026-11-02t17:00</code> (with a time). Click a day to see
+              Dates come from tags like <code>2026-11-02</code> (all day),{' '}
+              <code>2026-11-02t17:00</code> (with a time), or{' '}
+              <code>2026-11-02..2026-11-05</code> (a period). Click a day to see
               everything on it; done notes keep a check mark.
             </Typography>
           </>
@@ -560,7 +562,7 @@ export default function CalendarPage() {
                         : 'text.secondary',
                     }}
                   >
-                    {entry.info.hasTime ? entry.info.timeLabel : 'All day'}
+                    {entry.info.dayLabel}
                   </Box>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Stack
@@ -606,6 +608,16 @@ export default function CalendarPage() {
                     >
                       {entry.info.tag}
                     </Typography>
+                    {entry.info.isPeriod && entry.info.periodDayCount ? (
+                      <Typography
+                        variant="caption"
+                        sx={{ display: 'block', mt: 0.2, color: 'text.secondary' }}
+                      >
+                        {entry.info.periodLabel} · day{' '}
+                        {entry.info.periodDayIndex} of{' '}
+                        {entry.info.periodDayCount}
+                      </Typography>
+                    ) : null}
                   </Box>
                 </ButtonBase>
               ))}

@@ -25,11 +25,16 @@ bottom, and a rich-text editor built on Lexical.
   live in the URL (`?tag=movie&tag=important`, plus `match=any` for either-or),
   so a filtered board can be bookmarked or shared and survives opening a note.
 - **Dates and calendar** — add a date with the dashed **Date** chip on any card
-  or **Add date** in the editor. A date becomes a normal tag in one of two
-  formats: `2026-11-02` (all day) or `2026-11-02t17:00` (with a time). Tags are
-  matched case-insensitively, so existing tags such as `2026-11-02T17:00` work
-  too. In the editor, click an existing date tag to change its date or add a
-  time; the tag is updated in place instead of being removed and re-added. The
+  or **Add date** in the editor. A date becomes a normal tag in one of these
+  formats: `2026-11-02` (all day), `2026-11-02t17:00` (with a time), or a
+  period such as `2026-11-02..2026-11-05` and
+  `2026-11-02t09:00..2026-11-02t11:00`. Use the **Period** switch in the date
+  dialog to enter a start and end. Periods appear on every day they cover;
+  timed periods show the start time on the first day, the end time on the last
+  day, and “Ongoing” in between. Tags are matched case-insensitively, so
+  existing tags such as `2026-11-02T17:00` work too. In the editor, click an
+  existing date tag to change its date, add a time, or turn it into a period;
+  the tag is updated in place instead of being removed and re-added. The
   calendar button in the header opens a month view; each day shows its
   dated notes as chips with times, and clicking a day lists everything on it,
   lets you open a note, or start a new note already tagged with that day. Done

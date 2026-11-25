@@ -13,6 +13,7 @@ import CloudOutlinedIcon from '@mui/icons-material/CloudOutlined';
 import CodeRoundedIcon from '@mui/icons-material/CodeRounded';
 import MenuBookRoundedIcon from '@mui/icons-material/MenuBookRounded';
 import EventOutlinedIcon from '@mui/icons-material/EventOutlined';
+import DateRangeOutlinedIcon from '@mui/icons-material/DateRangeOutlined';
 import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
 import LocalOfferOutlinedIcon from '@mui/icons-material/LocalOfferOutlined';
 import FitnessCenterRoundedIcon from '@mui/icons-material/FitnessCenterRounded';
@@ -82,6 +83,7 @@ export default function TagIcon({
   if (Icon) return <Icon {...props} />;
   const dateTag = parseDateTag(tag);
   if (dateTag) {
+    if (dateTag.isPeriod) return <DateRangeOutlinedIcon {...props} />;
     return dateTag.hasTime ? (
       <ScheduleOutlinedIcon {...props} />
     ) : (

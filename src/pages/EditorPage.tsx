@@ -663,7 +663,7 @@ export default function EditorPage() {
                       <TagChip
                         key={key}
                         tag={tag}
-                        title={isDateTag(tag) ? 'Click to edit this date' : undefined}
+                        title={isDateTag(tag) ? 'Click to edit this date or period' : undefined}
                         onDelete={onDelete}
                         onClick={
                           isDateTag(tag)

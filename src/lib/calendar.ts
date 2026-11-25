@@ -4,10 +4,12 @@ import { isBlankNote } from './text';
 
 /**
  * Date tags are ordinary tags in one of these shapes:
- *   2026-11-02              all-day
- *   2026-11-02t17:00        with a time
- *   2026-11-02 17:00        with a space (imported / typed by hand)
- *   2026-11-02t17:00:00     seconds are accepted and ignored for display
+ *   2026-11-02                        all-day
+ *   2026-11-02t17:00                  with a time
+ *   2026-11-02 17:00                  with a space (imported / typed by hand)
+ *   2026-11-02t17:00:00               seconds are accepted and ignored for display
+ *   2026-11-02..2026-11-05            all-day period (inclusive)
+ *   2026-11-02t09:00..2026-11-02t11:00 timed period
  *
  * Tags are normalized to lowercase, so the separator is usually a lowercase t.
  */
@@ -24,6 +26,21 @@ export interface DateTagInfo {
   hasTime: boolean;
   /** Localized time label when `hasTime` is true. */
   timeLabel: string;
+  /** True when the tag covers a start..end range. */
+  isPeriod: boolean;
+  /** True when the period includes times (even on middle days). */
+  periodHasTime?: boolean;
+  /** Inclusive end of a period. */
+  endDate?: Date;
+  endDateKey?: string;
+  /** Label for this day in the calendar, e.g. "09:00", "All day" or "Ongoing". */
+  dayLabel: string;
+  /** 1-based position of this day inside a period. */
+  periodDayIndex?: number;
+  /** Total number of days in the period. */
+  periodDayCount?: number;
+  /** Human-readable range, e.g. "2 Nov 2026 – 5 Nov 2026". */
+  periodLabel?: string;
 }
 
 export interface CalendarEntry {
@@ -49,7 +66,7 @@ export function dateKey(date: Date): string {
   )}`;
 }
 
-export function parseDateTag(raw: string): DateTagInfo | null {
+function parseSingleDateTag(raw: string): DateTagInfo | null {
   const match = DATE_TAG_PATTERN.exec(raw.trim());
   if (!match) return null;
 
@@ -82,12 +99,45 @@ export function parseDateTag(raw: string): DateTagInfo | null {
     return null;
   }
 
+  const timeLabel = hasTime ? formatTimeLabel(date) : '';
   return {
     tag: raw,
     date,
     dateKey: dateKey(date),
     hasTime,
-    timeLabel: hasTime ? formatTimeLabel(date) : '',
+    timeLabel,
+    isPeriod: false,
+    dayLabel: hasTime ? timeLabel : 'All day',
+  };
+}
+
+/**
+ * Parse a single date/datetime tag or a period written as
+ * `start..end` (for example `2026-11-02..2026-11-05` or
+ * `2026-11-02t09:00..2026-11-02t11:00`).
+ */
+export function parseDateTag(raw: string): DateTagInfo | null {
+  const trimmed = raw.trim();
+  const separator = trimmed.indexOf('..');
+  if (separator === -1) return parseSingleDateTag(trimmed);
+
+  const start = parseSingleDateTag(trimmed.slice(0, separator));
+  const end = parseSingleDateTag(trimmed.slice(separator + 2));
+  if (!start || !end) return null;
+  if (start.hasTime !== end.hasTime) return null;
+  if (end.date.getTime() < start.date.getTime()) return null;
+
+  return {
+    ...start,
+    tag: raw,
+    isPeriod: true,
+    periodHasTime: start.hasTime,
+    endDate: end.date,
+    endDateKey: end.dateKey,
+    periodDayIndex: 1,
+    periodDayCount: daysBetweenInclusive(start.date, end.date),
+    periodLabel: `${formatDateTagLabel(start)} – ${formatDateTagLabel(end)}`,
+    dayLabel: start.dayLabel,
   };
 }
 
@@ -194,6 +244,82 @@ export function getMonthGrid(cursor: Date): Date[] {
   );
 }
 
+/** Inclusive day count between two dates, ignoring time and DST shifts. */
+function daysBetweenInclusive(start: Date, end: Date): number {
+  const startDay = new Date(
+    start.getFullYear(),
+    start.getMonth(),
+    start.getDate(),
+    12,
+  );
+  const endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate(), 12);
+  return Math.round((endDay.getTime() - startDay.getTime()) / 86_400_000) + 1;
+}
+
+/**
+ * Expand a period tag into one entry per day so a multi-day event appears on
+ * every day it covers. Timed periods keep their start time on the first day
+ * and their end time on the last day; days in between are marked as ongoing.
+ */
+function expandDateTag(info: DateTagInfo): DateTagInfo[] {
+  if (!info.isPeriod || !info.endDate) return [info];
+
+  const total = info.periodDayCount ?? daysBetweenInclusive(info.date, info.endDate);
+  const startKey = info.dateKey;
+  const endKey = info.endDateKey ?? dateKey(info.endDate);
+  const endDate = info.endDate;
+  const days: DateTagInfo[] = [];
+
+  for (let index = 0; index < total; index += 1) {
+    const day = addDays(
+      new Date(info.date.getFullYear(), info.date.getMonth(), info.date.getDate(), 12),
+      index,
+    );
+    const key = dateKey(day);
+    const isStart = key === startKey;
+    const isEnd = key === endKey;
+    const hasTime = info.hasTime && (isStart || isEnd);
+    let timeLabel = '';
+    let dayLabel = 'All day';
+
+    if (hasTime) {
+      if (isStart && isEnd) {
+        timeLabel = `${formatTimeLabel(info.date)}–${formatTimeLabel(endDate)}`;
+      } else if (isStart) {
+        timeLabel = formatTimeLabel(info.date);
+      } else {
+        timeLabel = formatTimeLabel(endDate);
+      }
+      dayLabel = timeLabel;
+    } else if (info.hasTime) {
+      dayLabel = 'Ongoing';
+    }
+
+    days.push({
+      ...info,
+      date: hasTime
+        ? isStart
+          ? info.date
+          : endDate
+        : new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12),
+      dateKey: key,
+      hasTime,
+      timeLabel,
+      dayLabel,
+      periodDayIndex: index + 1,
+      periodDayCount: total,
+    });
+  }
+
+  return days;
+}
+
+/** Timed entries win over all-day ones; an ongoing timed period beats an all-day tag. */
+function entryRank(info: DateTagInfo): number {
+  if (info.hasTime) return 2;
+  return info.isPeriod && info.periodHasTime ? 1 : 0;
+}
+
 /**
  * Turn every valid date tag into a calendar entry. If a note has more than one
  * tag on the same day, it appears once for that day and a timed tag wins over
@@ -211,9 +337,11 @@ export function collectDateEntries(notes: Note[]): DateEntryCollection {
     for (const tag of note.tags) {
       const info = parseDateTag(tag);
       if (!info) continue;
-      const existing = daysForNote.get(info.dateKey);
-      if (!existing || (!existing.info.hasTime && info.hasTime)) {
-        daysForNote.set(info.dateKey, { note, info });
+      for (const dayInfo of expandDateTag(info)) {
+        const existing = daysForNote.get(dayInfo.dateKey);
+        if (!existing || entryRank(dayInfo) > entryRank(existing.info)) {
+          daysForNote.set(dayInfo.dateKey, { note, info: dayInfo });
+        }
       }
     }
 
