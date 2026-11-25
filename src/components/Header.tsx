@@ -1,10 +1,14 @@
 import {
   AppBar,
   alpha,
-  Badge,
   Box,
   Button,
+  Divider,
   IconButton,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
   Toolbar,
   Tooltip,
   Typography,
@@ -14,13 +18,12 @@ import AddRoundedIcon from '@mui/icons-material/AddRounded';
 import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined';
 import LightModeRoundedIcon from '@mui/icons-material/LightModeRounded';
 import DarkModeRoundedIcon from '@mui/icons-material/DarkModeRounded';
-import CloudDoneOutlinedIcon from '@mui/icons-material/CloudDoneOutlined';
-import CloudOffOutlinedIcon from '@mui/icons-material/CloudOffOutlined';
 import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined';
 import Inventory2RoundedIcon from '@mui/icons-material/Inventory2Rounded';
+import MoreVertRoundedIcon from '@mui/icons-material/MoreVertRounded';
 import StickyNote2RoundedIcon from '@mui/icons-material/StickyNote2Rounded';
-import type { RefObject } from 'react';
+import { useState, type RefObject } from 'react';
 import { useThemeMode } from '../theme-mode';
 import SearchBar from './SearchBar';
 
@@ -55,6 +58,8 @@ export default function Header({
 }: HeaderProps) {
   const theme = useTheme();
   const { resolved, toggle } = useThemeMode();
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
+  const closeMenu = () => setMenuAnchor(null);
 
   const filtered = filteredCount !== totalCount;
   const countLabel = filtered
@@ -169,16 +174,23 @@ export default function Header({
           >
             <Box
               component="span"
-              sx={{ display: 'flex', alignItems: 'center', mr: 0.5 }}
-            >
-              {online ? (
-                <CloudDoneOutlinedIcon
-                  sx={{ fontSize: 19, color: 'text.secondary' }}
-                />
-              ) : (
-                <CloudOffOutlinedIcon sx={{ fontSize: 19, color: 'warning.main' }} />
-              )}
-            </Box>
+              role="img"
+              aria-label={online ? 'Online' : 'Offline'}
+              sx={{
+                width: 8,
+                height: 8,
+                flex: '0 0 auto',
+                mr: 0.75,
+                borderRadius: '50%',
+                bgcolor: online ? 'success.main' : 'warning.main',
+                boxShadow: `0 0 0 3px ${alpha(
+                  online
+                    ? theme.palette.success.main
+                    : theme.palette.warning.main,
+                  0.16,
+                )}`,
+              }}
+            />
           </Tooltip>
 
           <Tooltip title="Calendar">
@@ -187,72 +199,88 @@ export default function Header({
             </IconButton>
           </Tooltip>
 
-          <Tooltip
-            title={
-              doneView
-                ? 'Back to the board'
-                : doneCount > 0
-                  ? `Done notes (${doneCount})`
-                  : 'Done notes'
-            }
-          >
+          <Tooltip title="More actions">
             <IconButton
-              aria-label={
-                doneView ? 'Back to the board' : `Show done notes (${doneCount})`
-              }
-              aria-pressed={doneView}
-              onClick={onToggleDoneView}
-              sx={{
-                color: doneView ? 'primary.main' : 'text.secondary',
-                bgcolor: doneView
-                  ? alpha(theme.palette.primary.main, 0.14)
-                  : 'transparent',
-                '&:hover': {
-                  bgcolor: doneView
-                    ? alpha(theme.palette.primary.main, 0.2)
-                    : undefined,
-                },
+              aria-label="More actions"
+              aria-haspopup="menu"
+              aria-expanded={Boolean(menuAnchor)}
+              aria-controls={menuAnchor ? 'header-more-menu' : undefined}
+              onClick={(event) => setMenuAnchor(event.currentTarget)}
+            >
+              <MoreVertRoundedIcon />
+            </IconButton>
+          </Tooltip>
+          <Menu
+            id="header-more-menu"
+            anchorEl={menuAnchor}
+            open={Boolean(menuAnchor)}
+            onClose={closeMenu}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            slotProps={{
+              paper: { sx: { mt: 1, minWidth: 248, borderRadius: 2 } },
+            }}
+          >
+            <MenuItem
+              selected={doneView}
+              onClick={() => {
+                closeMenu();
+                onToggleDoneView();
               }}
             >
-              <Badge
-                badgeContent={doneCount}
-                color="primary"
-                max={99}
-                overlap="circular"
-                sx={{
-                  '& .MuiBadge-badge': {
-                    fontSize: 10,
-                    fontWeight: 700,
-                    height: 16,
-                    minWidth: 16,
-                    px: 0.4,
-                  },
-                }}
-              >
+              <ListItemIcon>
                 {doneView ? (
-                  <Inventory2RoundedIcon />
+                  <Inventory2RoundedIcon fontSize="small" />
                 ) : (
-                  <Inventory2OutlinedIcon />
+                  <Inventory2OutlinedIcon fontSize="small" />
                 )}
-              </Badge>
-            </IconButton>
-          </Tooltip>
-
-          <Tooltip title={resolved === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
-            <IconButton aria-label="Toggle color theme" onClick={toggle}>
-              {resolved === 'dark' ? (
-                <LightModeRoundedIcon />
-              ) : (
-                <DarkModeRoundedIcon />
-              )}
-            </IconButton>
-          </Tooltip>
-
-          <Tooltip title="Settings, backup and import">
-            <IconButton aria-label="Open settings" onClick={onOpenSettings}>
-              <SettingsOutlinedIcon />
-            </IconButton>
-          </Tooltip>
+              </ListItemIcon>
+              <ListItemText
+                primary={doneView ? 'Back to the board' : 'Done notes'}
+                secondary={
+                  !doneView && doneCount > 0
+                    ? `${doneCount} hidden from the board`
+                    : undefined
+                }
+              />
+            </MenuItem>
+            <Divider />
+            <MenuItem
+              onClick={() => {
+                closeMenu();
+                toggle();
+              }}
+            >
+              <ListItemIcon>
+                {resolved === 'dark' ? (
+                  <LightModeRoundedIcon fontSize="small" />
+                ) : (
+                  <DarkModeRoundedIcon fontSize="small" />
+                )}
+              </ListItemIcon>
+              <ListItemText
+                primary={
+                  resolved === 'dark'
+                    ? 'Switch to light mode'
+                    : 'Switch to dark mode'
+                }
+              />
+            </MenuItem>
+            <MenuItem
+              onClick={() => {
+                closeMenu();
+                onOpenSettings();
+              }}
+            >
+              <ListItemIcon>
+                <SettingsOutlinedIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText
+                primary="Settings"
+                secondary="Backup, import and appearance"
+              />
+            </MenuItem>
+          </Menu>
 
           <Button
             variant="contained"

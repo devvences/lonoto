@@ -18,6 +18,7 @@ import {
 import CalendarTodayOutlinedIcon from '@mui/icons-material/CalendarTodayOutlined';
 import ScheduleOutlinedIcon from '@mui/icons-material/ScheduleOutlined';
 import EventOutlinedIcon from '@mui/icons-material/EventOutlined';
+import { parseDateTag } from '../lib/calendar';
 
 type DateMode = 'date' | 'datetime';
 
@@ -27,6 +28,8 @@ interface DateTagDialogProps {
   onAdd: (tag: string) => void;
   /** Tags already on the note, used to avoid adding the same date twice. */
   existingTags?: string[];
+  /** Existing date tag to edit instead of adding a new one. */
+  initialTag?: string | null;
 }
 
 function pad(value: number): string {
@@ -48,19 +51,28 @@ export default function DateTagDialog({
   onClose,
   onAdd,
   existingTags = [],
+  initialTag = null,
 }: DateTagDialogProps) {
   const theme = useTheme();
   const [mode, setMode] = useState<DateMode>('date');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('09:00');
+  const editing = Boolean(initialTag);
 
   useEffect(() => {
     if (!open) return;
+    const initial = initialTag ? parseDateTag(initialTag) : null;
+    if (initial) {
+      setMode(initial.hasTime ? 'datetime' : 'date');
+      setDate(dateInputValue(initial.date));
+      setTime(timeInputValue(initial.date));
+      return;
+    }
     const now = new Date();
     setMode('date');
     setDate(dateInputValue(now));
     setTime(timeInputValue(now));
-  }, [open]);
+  }, [open, initialTag]);
 
   const tag = useMemo(
     () => (mode === 'datetime' && time ? `${date}t${time}` : date),
@@ -70,11 +82,13 @@ export default function DateTagDialog({
   const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date);
   const validTime = mode === 'date' || /^\d{2}:\d{2}$/.test(time);
   const valid = validDate && validTime;
+  const initialKey = initialTag?.trim().toLowerCase() ?? null;
   const duplicate =
     valid &&
-    existingTags.some(
-      (existing) => existing.trim().toLowerCase() === tag.toLowerCase(),
-    );
+    existingTags.some((existing) => {
+      const key = existing.trim().toLowerCase();
+      return key === tag.toLowerCase() && key !== initialKey;
+    });
 
   const handleToday = () => {
     const now = new Date();
@@ -90,10 +104,14 @@ export default function DateTagDialog({
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="xs">
-      <DialogTitle sx={{ fontWeight: 800 }}>Add a date</DialogTitle>
+      <DialogTitle sx={{ fontWeight: 800 }}>
+        {editing ? 'Edit date' : 'Add a date'}
+      </DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          The date becomes a tag on this note and shows up in the calendar.
+          {editing
+            ? 'Change the date, or switch to Date & time to add a time.'
+            : 'The date becomes a tag on this note and shows up in the calendar.'}
         </Typography>
 
         <ToggleButtonGroup
@@ -191,7 +209,7 @@ export default function DateTagDialog({
           disabled={!valid || duplicate}
           startIcon={<EventOutlinedIcon />}
         >
-          Add {mode === 'datetime' ? 'date & time' : 'date'}
+          {editing ? 'Save' : 'Add'} {mode === 'datetime' ? 'date & time' : 'date'}
         </Button>
       </DialogActions>
     </Dialog>

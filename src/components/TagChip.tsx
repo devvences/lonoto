@@ -8,6 +8,7 @@ interface TagChipProps {
   count?: number;
   selected?: boolean;
   className?: string;
+  title?: string;
   onClick?: (event: MouseEvent) => void;
   onDelete?: (event: SyntheticEvent) => void;
   size?: 'small' | 'medium';
@@ -18,6 +19,7 @@ export default function TagChip({
   count,
   selected = false,
   className,
+  title,
   onClick,
   onDelete,
   size = 'small',
@@ -27,6 +29,7 @@ export default function TagChip({
   return (
     <Chip
       className={className}
+      title={title}
       size={size}
       clickable={Boolean(onClick)}
       onClick={onClick}

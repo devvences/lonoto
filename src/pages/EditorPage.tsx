@@ -61,7 +61,7 @@ import {
   isMovieTag,
   type MoviePayload,
 } from '../lib/movie';
-import { isContentlessNote } from '../lib/calendar';
+import { isContentlessNote, isDateTag } from '../lib/calendar';
 import { isValidUrl } from '../lib/url';
 import { NOTE_NODES } from '../editor/nodes';
 import { lexicalTheme } from '../editor/lexical-theme';
@@ -117,6 +117,7 @@ export default function EditorPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [movieOpen, setMovieOpen] = useState(false);
   const [dateOpen, setDateOpen] = useState(false);
+  const [editingDateTag, setEditingDateTag] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast>({
     open: false,
     message: '',
@@ -336,12 +337,22 @@ export default function EditorPage() {
 
   const handleDateAdd = useCallback(
     (tag: string) => {
-      const next = normalizeTags([...tags, tag]);
+      const next = normalizeTags(
+        editingDateTag
+          ? tags.map((item) => (item === editingDateTag ? tag : item))
+          : [...tags, tag],
+      );
       setTags(next);
       updateLocal({ tags: next });
-      notify('Date added. It will show up in the calendar.', 'success');
+      notify(
+        editingDateTag
+          ? 'Date updated.'
+          : 'Date added. It will show up in the calendar.',
+        'success',
+      );
+      setEditingDateTag(null);
     },
-    [notify, tags, updateLocal],
+    [editingDateTag, notify, tags, updateLocal],
   );
 
   const handleMovieInsert = useCallback(
@@ -649,7 +660,21 @@ export default function EditorPage() {
                   value.map((tag, index) => {
                     const { key, onDelete } = getTagProps({ index });
                     return (
-                      <TagChip key={key} tag={tag} onDelete={onDelete} />
+                      <TagChip
+                        key={key}
+                        tag={tag}
+                        title={isDateTag(tag) ? 'Click to edit this date' : undefined}
+                        onDelete={onDelete}
+                        onClick={
+                          isDateTag(tag)
+                            ? (event) => {
+                                event.stopPropagation();
+                                setEditingDateTag(tag);
+                                setDateOpen(true);
+                              }
+                            : undefined
+                        }
+                      />
                     );
                   })
                 }
@@ -683,7 +708,10 @@ export default function EditorPage() {
               <Button
                 variant="outlined"
                 aria-label="Add date"
-                onClick={() => setDateOpen(true)}
+                onClick={() => {
+                  setEditingDateTag(null);
+                  setDateOpen(true);
+                }}
                 startIcon={<EventOutlinedIcon />}
                 sx={{
                   flex: '0 0 auto',
@@ -822,7 +850,11 @@ export default function EditorPage() {
 
       <DateTagDialog
         open={dateOpen}
-        onClose={() => setDateOpen(false)}
+        initialTag={editingDateTag}
+        onClose={() => {
+          setDateOpen(false);
+          setEditingDateTag(null);
+        }}
         onAdd={handleDateAdd}
         existingTags={tags}
       />

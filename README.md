@@ -28,7 +28,9 @@ bottom, and a rich-text editor built on Lexical.
   or **Add date** in the editor. A date becomes a normal tag in one of two
   formats: `2026-11-02` (all day) or `2026-11-02t17:00` (with a time). Tags are
   matched case-insensitively, so existing tags such as `2026-11-02T17:00` work
-  too. The calendar button in the header opens a month view; each day shows its
+  too. In the editor, click an existing date tag to change its date or add a
+  time; the tag is updated in place instead of being removed and re-added. The
+  calendar button in the header opens a month view; each day shows its
   dated notes as chips with times, and clicking a day lists everything on it,
   lets you open a note, or start a new note already tagged with that day. Done
   notes stay visible on the calendar with a check mark. Notes opened from the
